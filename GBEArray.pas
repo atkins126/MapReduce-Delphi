@@ -31,6 +31,12 @@ type
        function FindIndex(Lambda: TPredicate<T>):integer;                    // Return first index of element that match with the predicate
        function Extract(fromElement : integer = 0; toElement : integer = 0): TGBEArray<T>; // Extract element from an TGBEArray from fromElement indice to toElement indice to a new TGBEArray
                                                                                            // if fromElement or toElement are negative, it's indicate an offset from the end of the TGBEArray
+       function Reverse:TGBEArray<T>;                                        // Reverse the array
+       function Pop:T;                                                       // return the last item of the array and remove it from the array
+       function Shift: T;                                                    // return the first item of the array and remove it from the array
+       function LastOrDefault(const Lambda: TPredicate<T> = nil): T;         // Return first element or first element from a predicate (if predicate set) or the default value of T
+       function Fill(aValue : T; iStart : integer = 0; iEnd : integer = -1): TGBEArray<T>;       // Fill an TGBEArray<T> with aValue. If the TGBEArray is empty and the iStart at 0, then iEnd parameter specify also the length of the TGBEArray<T>
+       function toString(Lambda: TFunc<T, String>; sep : string = ','): String;
    end;
 
 implementation
@@ -54,6 +60,22 @@ end;
 class function TGBEArray<T>.Create(const Source: TArray<T>): TGBEArray<T>;
 begin
   Result.Data := Source;
+end;
+
+function TGBEArray<T>.Fill(aValue: T; iStart : integer = 0; iEnd : integer = -1): TGBEArray<T>;
+begin
+  if length(self.Data) = 0 then begin
+    if iEnd > -1 then begin
+      SetLength(self.Data, iEnd);
+      dec(iEnd);
+    end;
+  end;
+  if (iEnd = -1) or (iEnd > length(self.Data)) then iEnd := length(self.Data)-1;
+
+  for var i := iStart to iEnd do begin
+    self.Data[i] := aValue;
+  end;
+  result := self;
 end;
 
 function TGBEArray<T>.Filter(Lambda: TPredicate<T>): TGBEArray<T>;
@@ -118,6 +140,19 @@ begin
   result := TGBEArray<string>.Create(ResultArray);
 end;
 
+function TGBEArray<T>.LastOrDefault(const Lambda: TPredicate<T>): T;
+begin
+  if assigned(lambda) then begin
+    var indice := 0;
+    for var i := length(Self.Data)-1 downto 0 do
+      if Lambda(Self.Data[i]) then Exit(Self.Data[i]);
+    Exit(Default(T));
+  end else begin
+    if (Length(Self.Data) > 0) then Exit(Self.Data[length(Self.Data)-1])
+    else Exit(Default(T));
+  end;
+end;
+
 function TGBEArray<T>.Map<S>(Lambda: TFunc<T, S>): TGBEArray<S>;
 begin
   var ResultArray: TArray<S>;
@@ -144,6 +179,29 @@ begin
     end
   );
   result := TGBEArray<S>.Create(ResultArray);
+end;
+
+function TGBEArray<T>.Pop: T;
+begin
+  result := self.Data[length(self.Data)-1];
+  SetLength(self.Data,length(self.Data)-1);
+end;
+
+function TGBEArray<T>.Shift: T;
+begin
+  result := self.Data[0];
+
+  var ResultArray: TArray<T>;
+  SetLength(ResultArray,length(self.Data)-1);
+  var indice := 0;
+
+  for var i := 1 to length(self.Data)-1 do begin
+    ResultArray[indice] := self.Data[i];
+    inc(indice);
+  end;
+
+  setLength(Self.Data, length(ResultArray));
+  Self.Data := Copy(ResultArray);
 end;
 
 function TGBEArray<T>.Print(Lambda: TFunc<T, T>): TGBEArray<T>;
@@ -175,9 +233,31 @@ begin
     result := Lambda(result, it);
 end;
 
+function TGBEArray<T>.Reverse: TGBEArray<T>;
+begin
+  var ResultArray: TArray<T>;
+  SetLength(ResultArray,length(self.Data));
+  var indice := 0;
+  for var i := length(self.Data) -1 downto 0 do begin
+    ResultArray[indice] := self.Data[i];
+    inc(indice);
+  end;
+  result := TGBEArray<T>.Create(ResultArray);
+end;
+
 function TGBEArray<T>.ToArray: TArray<T>;
 begin
   result := Self.Data;
+end;
+
+function TGBEArray<T>.toString(Lambda: TFunc<T, String>; sep : string = ','): String;
+begin
+  var s := '';
+  for var it: T in self.Data do begin
+    if s.IsEmpty then s := Lambda(it)
+    else s := s + sep + Lambda(it);
+  end;
+  result := s;
 end;
 
 function TGBEArray<T>.FirstOrDefault(const Lambda: TPredicate<T> = nil): T;

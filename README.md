@@ -1,7 +1,35 @@
-# MapReduce [![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
- MapReduce with Delphi
+# MapReduce
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+![Top language](https://img.shields.io/github/languages/top/gbegreg/MapReduce)
+[![](https://tokei.rs/b1/github/gbegreg/MapReduce?category=code)](https://github.com//gbegreg/MapReduce)
+[![](https://tokei.rs/b1/github/gbegreg/MapReduce?category=files)](https://github.com//gbegreg/MapReduce)
+![GitHub last commit](https://img.shields.io/github/last-commit/gbegreg/MapReduce)
 
-GBEArray is an implementation of MapReduce. It's a generic TArray<T> with some methods : map, reduce, filter, gather, any, print and concat.
+MapReduce with Delphi.
+
+GBEArray is an implementation of MapReduce. It's a generic TArray<T> with some methods :<br /> 
+  Any<br />
+  Concat<br />
+  Every<br />
+  Extract<br />
+  Fill<br />
+  Filter<br />
+  FindIndex<br />
+  FirstOrDefault<br />
+  ForEach<br />
+  Gather<br />
+  LastOrDefault<br />
+  Map<br />
+  MapParallel<br />
+  Pop<br />
+  Print<br />
+  Reduce<br />
+  Reverse<br />
+  Shift<br />
+  Sort<br />
+  ToArray<br />
+  ToString<br />
+  
 
 The project is a sample application to explain how to use it.
 
@@ -9,4 +37,6 @@ In the blue rectangle, you need to click on Initialize button to generate a rand
 In the purple rectangle, the click on the button show a sequence of treatments on complex object (TPersonne).<br><br>
 Finally, in the yellow rectangle, there is a TMemo where you can write some text. If you click on the button, the process will extract each word and compute for each word its number of occurrences.
  
-<img src="img/capture.png"> 
+[![MapReduce](http://img.youtube.com/vi/-KurgNbHmvQ/0.jpg)](https://www.youtube.com/watch?v=-KurgNbHmvQ)
+
+(click the image to see the Youtube video)
