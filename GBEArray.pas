@@ -30,6 +30,7 @@ type
        procedure ForEach(Lambda: TProc<T>; fromElement : integer = 0; toElement : integer = -1); // execute lambda for all elements don't return object
        function Gather(Lambda: TFunc<T,string, string>; sep : string = ';'): TGBEArray<string>; // group the keys/values and return a TGBEArray<string>
        function Insert(aValue : T; index : integer = 0): TGBEArray<T>;       // Insert aValue at index position and return a new TGBEArray
+       function KeepDuplicates: TGBEArray<T>;                                // Return a new TGBEArray with only duplicates elements
        function LastOrDefault(const Lambda: TPredicate<T> = nil): T;         // Return first element or first element from a predicate (if predicate set) or the default value of T
        function Map<S>(Lambda: TFunc<T, S>): TGBEArray<S>;                   // map
        function MapParallel<S>(Lambda: TFunc<T, S>): TGBEArray<S>;           // mapParallel
@@ -45,7 +46,7 @@ type
        function ToArray: TArray<T>;                                          // convert TGBEArry to TArray
        function ToDictionary(iStartKey : integer = 0): TDictionary<integer, T>;  // convert to TDictionary with an optional paramter to specify the start index of key
        function ToString(Lambda: TFunc<T, String>; sep : string = ','): String; // convert to string
-       function Unique: TGBEArray<T>;                                        // Return a new TGBEArray<T> without duplicates
+       function Unique(const Comparer: IComparer<T> = nil): TGBEArray<T>;    // Return a new TGBEArray<T> without duplicates. You can specify a comparer to sort result array as you want
    end;
 
 implementation
@@ -211,6 +212,32 @@ begin
     end;
     result := TGBEArray<T>.Create(ResultArray);
   end else result := TGBEArray<T>.Create(self.data);
+end;
+
+function TGBEArray<T>.KeepDuplicates: TGBEArray<T>;
+begin
+  var hash1 := TDictionary<T, integer>.create(length(self.Data));
+  var hash2 := TDictionary<T, integer>.create(length(self.Data));
+  var lgHash1 := hash1.Count;
+  var lgHash2 := hash2.Count;
+  try
+    for var it in self.Data do begin
+      lgHash1 := hash1.Count;
+      hash1.AddOrSetValue(it, 0);
+      if lgHash1 = hash1.count then begin
+        lgHash2 := hash2.Count;
+        hash2.AddOrSetValue(it, 0);
+      end;
+    end;
+
+    var ResultArray: TArray<T>;
+    SetLength(ResultArray, hash2.Count);
+    resultArray := hash2.Keys.ToArray;
+    result := TGBEArray<T>.Create(ResultArray);
+  finally
+    hash1.Free;
+    hash2.Free;
+  end;
 end;
 
 function TGBEArray<T>.LastOrDefault(const Lambda: TPredicate<T>): T;
@@ -380,7 +407,7 @@ begin
   result := s;
 end;
 
-function TGBEArray<T>.Unique: TGBEArray<T>;
+function TGBEArray<T>.Unique(const Comparer: IComparer<T> = nil): TGBEArray<T>;
 begin
   var hash := TDictionary<T, integer>.create(length(self.Data));
   try
@@ -390,6 +417,7 @@ begin
     var ResultArray: TArray<T>;
     SetLength(ResultArray, hash.Count);
     resultArray := hash.Keys.ToArray;
+    if assigned(Comparer) then TArray.Sort<T>(resultArray, Comparer);
     result := TGBEArray<T>.Create(ResultArray);
   finally
     hash.Free;
