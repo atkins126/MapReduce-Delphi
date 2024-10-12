@@ -1,4 +1,4 @@
-{ Developed by Grégory Bersegeay 2022
+{ Developed by Grégory Bersegeay 2022-2024
   https://github.com/gbegreg/MapReduce
   https://www.gbesoft.fr
   https://www.youtube.com/channel/UCmmgsWSi92t51LbWaiyBRkQ
@@ -7,9 +7,10 @@ unit GBEArray;
 
 interface
 
-uses System.SysUtils, Generics.Collections, system.Generics.Defaults, system.Threading;
+uses System.SysUtils, Generics.Collections, system.Generics.Defaults, system.Threading, System.Rtti, system.Math, StrUtils;
 
 type
+   TGBEMerge = (subtract, inBoth);
    TGBEArray<T> = record
      private
        Data: TArray<T>;  // the datas
@@ -29,23 +30,32 @@ type
        function FirstOrDefault(const Lambda: TPredicate<T> = nil): T;        // Return first element or first element from a predicate (if predicate set) or the default value of T
        procedure ForEach(Lambda: TProc<T>; fromElement : integer = 0; toElement : integer = -1); // execute lambda for all elements don't return object
        function Gather(Lambda: TFunc<T,string, string>; sep : string = ';'): TGBEArray<string>; // group the keys/values and return a TGBEArray<string>
+       function Includes(aValue: T; lambda: TFunc<T, string> = nil): boolean;                                // aValue is included in the array ?
        function Insert(aValue : T; index : integer = 0): TGBEArray<T>;       // Insert aValue at index position and return a new TGBEArray
+       function IntersectionWith(anotherArray: TGBEArray<T>; lambda: TFunc<T, string> = nil): TGBEArray<T>;  // Return a new TGBEArray which is intersection of original arrya and anotherArray
+       function Join(sep: string = ','; lambda: TFunc<T, string> = nil): String;  // Join elements of array in a string with sep as separator
        function KeepDuplicates: TGBEArray<T>;                                // Return a new TGBEArray with only duplicates elements
        function LastOrDefault(const Lambda: TPredicate<T> = nil): T;         // Return first element or first element from a predicate (if predicate set) or the default value of T
        function Map<S>(Lambda: TFunc<T, S>): TGBEArray<S>;                   // map
        function MapParallel<S>(Lambda: TFunc<T, S>): TGBEArray<S>;           // mapParallel
+       function AbsoluteMajorityElement(Lambda: TFunc<T, String> = nil;
+                noAbsoluteMajority : string = 'No absolute majority'): String; // returns a string which indicates the element of the array which is present in an absolute majority, returns noAbsoluteMajority if no element has an absolute majority
        function Pop:T;                                                       // return the last item of the array and remove it from the array
        function Print(Lambda: TFunc<T, T>): TGBEArray<T>;                    // print the data
        function Reduce<S>(Lambda: TFunc<S, T, S>; const Init: S): S;         // reduce
        function ReduceRight<S>(Lambda: TFunc<S, T, S>; const Init: S): S;
+       function Remove(anotherArray: TGBEArray<T>; lambda: TFunc<T, string> = nil): TGBEArray<T>;            // return a new TGBEArray<T> without element of anotherArray
        function Reverse:TGBEArray<T>;                                        // Reverse the array
        function Shift: T;                                                    // return the first item of the array and remove it from the array
        function Swap(index1, index2 : integer): TGBEArray<T>;                // Return new TGBEArra<T> with swap item1 and item2
        function Sort(const Comparer: IComparer<T> = nil): TGBEArray<T>;      // sort
+       function ParallelSort(const Comparer: IComparer<T> = nil): TGBEArray<T>;  // sort with TParallelArray
        function SuchAs(index : integer; aValue : T): TGBEArray<T>;           // Generate a new Array with the same datas but with aValue at index position
+       function SymmetricalDifferenceWith(anotherArray: TGBEArray<T>; lambda: TFunc<T, string> = nil): TGBEArray<T>;  // Return a new TGBEArray<T> symetrical difference of original array and anotherArray
        function ToArray: TArray<T>;                                          // convert TGBEArry to TArray
        function ToDictionary(iStartKey : integer = 0): TDictionary<integer, T>;  // convert to TDictionary with an optional paramter to specify the start index of key
        function ToString(Lambda: TFunc<T, String>; sep : string = ','): String; // convert to string
+       function UnionWith(anotherArray: TGBEArray<T>; lambda: TFunc<T, string> = nil): TGBEArray<T>;         // Return a new TGBEArray<T> which is union between original array and anotherArray
        function Unique(const Comparer: IComparer<T> = nil): TGBEArray<T>;    // Return a new TGBEArray<T> without duplicates. You can specify a comparer to sort result array as you want
    end;
 
@@ -326,6 +336,14 @@ begin
   Result := TGBEArray<T>.Create(ResultArray);
 end;
 
+function TGBEArray<T>.ParallelSort(const Comparer: IComparer<T> = nil): TGBEArray<T>;
+begin
+  var ResultArray : TArray<T> := Copy(Self.Data);
+  if assigned(Comparer) then TParallelArray.Sort<T>(ResultArray, Comparer)
+  else TParallelArray.Sort<T>(ResultArray);
+  Result := TGBEArray<T>.Create(ResultArray);
+end;
+
 function TGBEArray<T>.SuchAs(index: integer; aValue: T): TGBEArray<T>;
 begin
   var ResultArray: TArray<T>;
@@ -417,7 +435,7 @@ begin
     var ResultArray: TArray<T>;
     SetLength(ResultArray, hash.Count);
     resultArray := hash.Keys.ToArray;
-    if assigned(Comparer) then TArray.Sort<T>(resultArray, Comparer);
+    if assigned(Comparer) then TParallelArray.Sort<T>(resultArray, Comparer);
     result := TGBEArray<T>.Create(ResultArray);
   finally
     hash.Free;
@@ -464,6 +482,115 @@ begin
 
   SetLength(ResultArray,ResultArrayFinalLength);
   result := TGBEArray<T>.Create(ResultArray);
+end;
+
+function TGBEArray<T>.Join(sep: string = ','; lambda: TFunc<T, string> = nil): String;
+begin
+  var resultat := '';
+  if assigned(lambda) then begin
+    for var it in self.Data do
+        resultat := resultat + sep + lambda(it);
+  end else begin
+    for var i := 0 to length(self.Data) -1 do begin
+      resultat := resultat + TValue.From<T>(self.Data[i]).ToString() + sep;
+    end;
+  end;
+  if resultat.EndsWith(sep, true) then begin
+    resultat := copy(resultat, 1, length(resultat) - length(sep));
+  end;
+
+  result := resultat;
+end;
+
+function TGBEArray<T>.Remove(anotherArray: TGBEArray<T>; lambda: TFunc<T, string> = nil): TGBEArray<T>;
+begin
+  result := self.filter(function(value: T): Boolean
+                        begin
+                           result := not(anotherArray.includes(value, lambda));
+                        end);
+end;
+
+function TGBEArray<T>.IntersectionWith(anotherArray: TGBEArray<T>; lambda: TFunc<T, string> = nil): TGBEArray<T>;
+begin
+  result := self.filter(function(value: T): Boolean
+                        begin
+                            result := anotherArray.includes(value, lambda);
+                        end);
+end;
+
+function TGBEArray<T>.SymmetricalDifferenceWith(anotherArray: TGBEArray<T>; lambda: TFunc<T, string> = nil): TGBEArray<T>;
+begin
+  var courant := TGBEArray<T>.Create(Self.Data);
+  result := self.filter(function(value: T): Boolean
+                        begin
+                          result := not(anotherArray.includes(value, lambda));
+                        end)
+                .concat(anotherArray.filter(function(value: T): Boolean
+                                            begin
+                                               result := not(courant.includes(value, lambda));
+                                            end)
+                        );
+end;
+
+function TGBEArray<T>.UnionWith(anotherArray: TGBEArray<T>; lambda: TFunc<T, string> = nil): TGBEArray<T>;
+begin
+  var inter := self.intersectionWith(anotherArray, lambda);
+  result := self.SymmetricalDifferenceWith(anotherArray, lambda).concat(inter);
+end;
+
+function TGBEArray<T>.includes(aValue: T; lambda: TFunc<T, string> = nil): boolean;
+begin
+  if assigned(lambda) then begin
+    for var it in Self.Data do
+      if lambda(it) = lambda(aValue) then Exit(True);
+    Exit(False);
+  end else begin
+    for var it in Self.Data do
+      if TValue.From<T>(it).toString = TValue.From<T>(aValue).toString then Exit(True);
+    Exit(False);
+  end;
+end;
+
+function TGBEArray<T>.AbsoluteMajorityElement(Lambda: TFunc<T, String> = nil; noAbsoluteMajority : string = 'No absolute majority'): String;
+begin
+  var anArray : TArray<String>;
+  setLength(anArray, length(self.data));
+  var lambdaAssigned := assigned(lambda);
+
+  if lambdaAssigned then begin
+    for var i := 0 to length(self.Data) -1 do
+        anArray[i] := lambda(self.Data[i]);
+  end else begin
+    for var i := 0 to length(self.Data) -1 do begin
+      anArray[i] := TValue.From<T>(self.Data[i]).ToString;
+    end;
+  end;
+
+  // Boyer-Moore majority vote algo
+  var element : T;
+  var counter := 0;
+
+  for var i := 0 to length(anArray) -1 do begin
+    if counter = 0 then begin
+       element := self.Data[i];
+       counter := 1;
+    end else begin
+      if lambdaAssigned then counter := counter + system.Math.ifthen(lambda(element) = anArray[i], 1, -1)
+      else counter := counter + system.Math.ifthen(TValue.From<T>(element).toString = anArray[i] , 1, -1);
+    end;
+  end;
+
+  var foundElement :='';
+  if lambdaAssigned then foundElement := lambda(element)
+  else foundElement := TValue.From<T>(element).toString;
+
+  // foundElement is it really majority ?
+  var nbFoundElement := 0;
+  for var I in anArray do begin
+    if i = foundElement then inc(nbFoundElement);
+  end;
+
+  result := strutils.IfThen(nbFoundElement > length(anArray) / 2, foundElement, noAbsoluteMajority);
 end;
 
 end.
